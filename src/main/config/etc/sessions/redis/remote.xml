@@ -1,0 +1,31 @@
+<?xml version="1.0"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure_9_3.dtd">
+
+<Configure id="Server" class="org.eclipse.jetty.server.Server">
+    <New id="jedisPoolConfig" class="redis.clients.jedis.JedisPoolConfig"/>
+
+    <New id="jedisPool" class="redis.clients.jedis.JedisPool">
+        <Arg>
+            <Ref refid="jedisPoolConfig"/>
+        </Arg>
+        <Arg>
+            <Property name="com.cloudbees.analytics.sse.session.redis.host" default="localhost"/>
+        </Arg>
+        <Arg type="int">
+            <Property name="com.cloudbees.analytics.sse.session.redis.port" default="6379"/>
+        </Arg>
+        <Arg type="boolean">
+            <Property name="com.cloudbees.analytics.sse.session.redis.use.ssl" default="false"/>
+        </Arg>
+    </New>
+
+    <Call name="addBean">
+        <Arg>
+            <New id="sessionDataStoreFactory" class="com.cloudbees.analytics.sse.RedisSessionDataStoreFactory">
+                <Set name="jedisPool">
+                    <Ref refid="jedisPool"/>
+                </Set>
+            </New>
+        </Arg>
+    </Call>
+</Configure>
