@@ -21,7 +21,7 @@
 
     <Call name="addBean">
         <Arg>
-            <New id="sessionDataStoreFactory" class="com.cloudbees.analytics.sse.RedisSessionDataStoreFactory">
+            <New id="sessionDataStoreFactory" class="com.cloudbees.jetty.session.redis.RedisSessionDataStoreFactory">
                 <Set name="jedisPool">
                     <Ref refid="jedisPool"/>
                 </Set>

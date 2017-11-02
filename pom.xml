@@ -7,7 +7,7 @@
     <parent>
         <groupId>com.cloudbees</groupId>
         <artifactId>cloudbees-internal-parent</artifactId>
-        <version>20</version>
+        <version>22</version>
     </parent>
 
     <artifactId>jetty-redis</artifactId>
@@ -17,6 +17,10 @@
         <jackson.version>2.8.7</jackson.version>
         <jedis.version>2.9.0</jedis.version>
         <jetty.version>9.4.6.v20170531</jetty.version>
+        <pubsub-light.version>1.13-SNAPSHOT</pubsub-light.version>
+        <sse-gateway.version>1.16-SNAPSHOT</sse-gateway.version>
+        <commons-pool2.version>2.4.2</commons-pool2.version>
+        <acegi-security.version>1.0.7</acegi-security.version>
     </properties>
 
     <dependencies>
@@ -38,25 +42,26 @@
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
         </dependency>
+
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.12</version>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
 
     <build>
-        <pluginManagement>
-            <plugins>
-                <plugin>
-                    <groupId>org.apache.maven.plugins</groupId>
-                    <artifactId>maven-assembly-plugin</artifactId>
-                    <version>3.0.0</version>
-                    <dependencies>
-                        <dependency>
-                            <groupId>org.eclipse.jetty.toolchain</groupId>
-                            <artifactId>jetty-assembly-descriptors</artifactId>
-                            <version>1.0</version>
-                        </dependency>
-                    </dependencies>
-                </plugin>
-            </plugins>
-        </pluginManagement>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>true</filtering>
+            </resource>
+            <resource>
+                <directory>src/main/config/modules</directory>
+                <filtering>true</filtering>
+            </resource>
+        </resources>
 
         <plugins>
             <plugin>
@@ -64,6 +69,80 @@
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <artifactId>maven-clean-plugin</artifactId>
+                <version>3.0.0</version>
+                <configuration>
+                    <filesets>
+                        <fileset>
+                            <directory>src/main/config/lib</directory>
+                        </fileset>
+                        <fileset>
+                            <directory>src/test/jetty/jetty-base</directory>
+                        </fileset>
+                    </filesets>
+                </configuration>
+            </plugin>
+
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-dependency-plugin</artifactId>
+                <version>3.0.2</version>
+                <executions>
+                    <execution>
+                        <id>copy</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>copy</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <artifactItems>
+                        <artifactItem>
+                            <groupId>org.jenkins-ci.plugins</groupId>
+                            <artifactId>sse-common</artifactId>
+                            <version>${sse-gateway.version}</version>
+                            <type>jar</type>
+                            <overWrite>true</overWrite>
+                            <outputDirectory>${project.basedir}/src/main/config/lib</outputDirectory>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>org.jenkins-ci.plugins</groupId>
+                            <artifactId>pubsub-light-common</artifactId>
+                            <version>${pubsub-light.version}</version>
+                            <type>jar</type>
+                            <overWrite>true</overWrite>
+                            <outputDirectory>${project.basedir}/src/main/config/lib</outputDirectory>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>org.jenkins-ci.plugins</groupId>
+                            <artifactId>pubsub-light-redis-provider</artifactId>
+                            <version>${pubsub-light.version}</version>
+                            <type>jar</type>
+                            <overWrite>true</overWrite>
+                            <outputDirectory>${project.basedir}/src/main/config/lib</outputDirectory>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>org.jenkins-ci.plugins</groupId>
+                            <artifactId>pubsub-light-redis</artifactId>
+                            <version>${pubsub-light.version}</version>
+                            <type>jar</type>
+                            <overWrite>true</overWrite>
+                            <outputDirectory>${project.basedir}/src/main/config/lib</outputDirectory>
+                        </artifactItem>
+                        <artifactItem>
+                            <groupId>${project.groupId}</groupId>
+                            <artifactId>${project.artifactId}</artifactId>
+                            <version>${project.version}</version>
+                            <type>jar</type>
+                            <overWrite>true</overWrite>
+                            <outputDirectory>${project.basedir}/src/main/config/lib</outputDirectory>
+                        </artifactItem>
+                    </artifactItems>
                 </configuration>
             </plugin>
 
@@ -77,13 +156,81 @@
                             <goal>single</goal>
                         </goals>
                         <configuration>
-                            <descriptorRefs>
-                                <descriptorRef>config</descriptorRef>
-                            </descriptorRefs>
+                            <descriptors>
+                                <descriptor>src/assembly/config.xml</descriptor>
+                            </descriptors>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <!-- this IT requires a local jetty installation at src/test -->
+            <id>local-jetty-it</id>
+            <activation>
+                <activeByDefault>false</activeByDefault>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>1.6.0</version>
+                        <executions>
+                            <execution>
+                                <id>unpack-config-jar</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>jar</executable>
+                                    <workingDirectory>src/test/jetty/jetty-base</workingDirectory>
+                                    <arguments>
+                                        <argument>xf</argument>
+                                        <argument>${project.build.directory}/jetty-redis-1.0-SNAPSHOT-config.jar
+                                        </argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>add-redis-session-module</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <workingDirectory>src/test/jetty/jetty-base</workingDirectory>
+                                    <arguments>
+                                        <argument>-jar</argument>
+                                        <argument>../start.jar</argument>
+                                        <argument>--add-to-start=session-store-redis-remote</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                            <execution>
+                                <id>start-jetty</id>
+                                <phase>integration-test</phase>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <configuration>
+                                    <executable>java</executable>
+                                    <workingDirectory>src/test/jetty/jetty-base</workingDirectory>
+                                    <arguments>
+                                        <argument>-jar</argument>
+                                        <argument>../start.jar</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

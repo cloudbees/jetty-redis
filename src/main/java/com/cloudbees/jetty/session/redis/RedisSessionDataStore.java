@@ -1,17 +1,14 @@
 package com.cloudbees.jetty.session.redis;
 
-import java.util.HashSet;
-import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
-import org.eclipse.jetty.server.session.AbstractSessionDataStore;
-import org.eclipse.jetty.server.session.SessionData;
-import org.eclipse.jetty.util.annotation.ManagedAttribute;
-import org.eclipse.jetty.util.annotation.ManagedObject;
-import org.eclipse.jetty.util.log.Log;
-import org.eclipse.jetty.util.log.Logger;
+import org.eclipse.jetty.server.session.*;
+import org.eclipse.jetty.util.annotation.*;
+import org.eclipse.jetty.util.log.*;
 import redis.clients.jedis.Jedis;
 
-import static com.cloudbees.jetty.session.redis.SerializationUtils.getMapper;
+import java.io.*;
+import java.nio.charset.Charset;
+import java.util.*;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Based on https://github.com/eclipse/jetty.project/blob/jetty-9.4.x/jetty-Redis/src/main/java/org/eclipse/jetty/session/Redis/RedisSessionDataStore.java
@@ -26,6 +23,28 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
         this.jedis = jedis;
     }
 
+    static class ObjectInputStreamWithLoader extends ObjectInputStream
+    {
+        private ClassLoader loader;
+
+        public ObjectInputStreamWithLoader(InputStream in, ClassLoader loader)
+                throws IOException, StreamCorruptedException {
+
+            super(in);
+            if (loader == null) {
+                throw new IllegalArgumentException("Illegal null argument to ObjectInputStreamWithLoader");
+            }
+            this.loader = loader;
+        }
+
+        protected Class resolveClass(ObjectStreamClass classDesc)
+                throws IOException, ClassNotFoundException {
+
+            String cname = classDesc.getName();
+            return Class.forName(cname, false, this.loader);
+        }
+    }
+
     @Override
     public SessionData load(String id) throws Exception {
         final AtomicReference<SessionData> reference = new AtomicReference<>();
@@ -34,10 +53,13 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
         Runnable load = () -> {
             try {
                 LOGGER.debug("Loading session {} from Redis", id);
-                final String session = jedis.get(getCacheKey(id));
-                if(session != null) {
-                    SessionData sd = getMapper().readValue(session, SessionData.class);
-                    reference.set(sd);
+                final byte[] session = jedis.get(getCacheKey(id).getBytes());
+                if (session != null) {
+                    try (ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(session);
+                         ObjectInputStream objectInputStream = new ObjectInputStreamWithLoader(byteArrayInputStream, _context.getContext().getClassLoader())) {
+                        SessionData sd = (SessionData) objectInputStream.readObject();
+                        reference.set(sd);
+                    }
                 }
             } catch (final Exception e) {
                 exception.set(e);
@@ -108,12 +130,11 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
 
     @Override
     public void doStore(String id, SessionData data, long lastSaveTime) throws Exception {
-        try {
-            final String serializedSession = getMapper().writeValueAsString(data);
-            jedis.set(getCacheKey(id), serializedSession);
+        try (ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+             ObjectOutputStream objectOutputStream = new ObjectOutputStream(byteArrayOutputStream)) {
+            objectOutputStream.writeObject(data);
+            jedis.set(getCacheKey(id).getBytes(Charset.defaultCharset()), byteArrayOutputStream.toByteArray());
             LOGGER.debug("Session {} saved to Redis, expires {} ", id, data.getExpiry());
-        } catch (Exception e) {
-            e.printStackTrace();
         }
     }
 
@@ -134,11 +155,9 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
         final AtomicReference<Exception> exception = new AtomicReference<>();
 
         Runnable load = () -> {
-            try
-            {
+            try {
                 final boolean exists = jedis.exists(getCacheKey(id));
-                if (!exists)
-                {
+                if (!exists) {
                     reference.set(Boolean.FALSE);
                     return;
                 }
@@ -148,9 +167,7 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
                     reference.set(Boolean.TRUE);
                 else
                     reference.set(sd.getExpiry() > System.currentTimeMillis());
-            }
-            catch (Exception e)
-            {
+            } catch (Exception e) {
                 exception.set(e);
             }
         };

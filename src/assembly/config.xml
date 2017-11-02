@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- based on https://github.com/eclipse/jetty.toolchain/blob/master/jetty-assembly-descriptors/src/main/resources/assemblies/config.xml -->
+<assembly>
+    <id>config</id>
+    <includeBaseDirectory>false</includeBaseDirectory>
+    <formats>
+        <format>jar</format>
+    </formats>
+    <fileSets>
+        <fileSet>
+            <directory>src/main/config</directory>
+            <outputDirectory/>
+            <includes>
+                <include>**</include>
+            </includes>
+            <excludes>
+                <exclude>session-store-redis-remote.mod</exclude>
+            </excludes>
+        </fileSet>
+    </fileSets>
+    <files>
+        <file>
+            <source>src/main/config/modules/session-store-redis-remote.mod</source>
+            <outputDirectory>modules</outputDirectory>
+            <filtered>true</filtered>
+        </file>
+    </files>
+</assembly>
