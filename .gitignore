@@ -1,25 +1,22 @@
-# Compiled class file
-*.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
-*.jar
-*.war
-*.ear
-*.zip
-*.tar.gz
-*.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-
-.idea
+#Ignore all dot files
+.DS_Store
+.idea/
+.idea.*/
 *.iml
+*.ipr
+*.iws
+**/target/
+*~
+node
+node_modules
+work
+app.properties
+npm-debug.log*
+**/.settings/
+**/.project
+**/.classpath
+**/.permission
+.build_container
+.watch_trigger
+.vscode
+src/test
